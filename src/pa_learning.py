@@ -49,7 +49,7 @@ HIDDEN_DIM = 5
 STACKED_LAYERS = 1
 LEARNING_RATE = 0.001
 NUM_EPOCH = 10
-SEQUENCE_LEN = 10
+LEARNING = 0.75
 
 ComPairType = FrozenSet[Tuple[str,str]]
 rows_filter = ["asduType", "cot"]
@@ -173,12 +173,12 @@ def list_tensor(x):
 """
 Training function
 """
-def train_epoch(model, training_loader, epoch, loss_function, optimizer):
+def train_epoch(model, learn_loader, epoch, loss_function, optimizer):
     model.train(True)
     print(f'Epoch: {epoch + 1}')
     running_loss = 0.0
 
-    for batch_index, batch in enumerate(training_loader):
+    for batch_index, batch in enumerate(learn_loader):
         x_batch, y_batch = batch[0].to(LSTM.DEVICE), batch[1].to(LSTM.DEVICE)
         
         output = model(x_batch)
@@ -198,11 +198,11 @@ def train_epoch(model, training_loader, epoch, loss_function, optimizer):
 """
 validation function
 """
-def validate_epoch(model, testing_loader, loss_function):
+def validate_epoch(model, validate_loader, loss_function):
     model.train(False)
     running_loss = 0.0
 
-    for batch_index, batch in enumerate(testing_loader):
+    for batch_index, batch in enumerate(validate_loader):
         x_batch, y_batch = batch[0].to(LSTM.DEVICE), batch[1].to(LSTM.DEVICE)
 
         with torch.no_grad():
@@ -210,7 +210,7 @@ def validate_epoch(model, testing_loader, loss_function):
             loss = loss_function(output, y_batch)
             running_loss += loss
 
-    avg_loss = running_loss / len(testing_loader)
+    avg_loss = running_loss / len(validate_loader)
 
     print('Val Loss: {0:.3f}'.format(avg_loss))
     print('***********************************************')
@@ -309,23 +309,27 @@ def main():
         if len(testing) > 0:
             print("Accuracy: {0}".format((len(testing)-miss)/float(len(testing))))
 
-        for pair in testing:
-            print(pair)
+
+        #split training data to learning and validation data
+        index = int(len(training)*LEARNING)
+        learn, validate = training[:index], training[index:]
+
+        #max conversation length
+        conv_len = max(len(row) for row in lines)
 
         # Preparing data for NN
-        x_training = list_tensor(training)
-        x_testing = list_tensor(testing)
+        x_learn = list_tensor(learn, conv_len)
+        x_validate = list_tensor(validate, conv_len)
 
         # tensor of outputs for training
-        y_training = torch.ones(x_training.shape[0], 1)
-        y_testing = torch.ones(x_testing.shape[0], 1)
+        y_learn = torch.ones(x_learn.shape[0], 1)
+        y_validate = torch.ones(x_validate.shape[0], 1)
 
-        training_dataset = LSTM.NetworkTrainingDataset(x_training, y_training)
-        testing_dataset = LSTM.NetworkTrainingDataset(x_testing, y_testing)
-        #testing_dataset = LSTM.NetworkTestingDataset(x_testing)
+        learn_dataset = LSTM.NetworkDataset(x_learn, y_learn)
+        validate_dataset = LSTM.NetworkDataset(x_validate, y_validate)
 
-        training_loader = DataLoader(training_dataset, BATCH_SIZE, shuffle=True)
-        testing_loader = DataLoader(testing_dataset, BATCH_SIZE, shuffle=False)
+        learn_loader = DataLoader(learn_dataset, BATCH_SIZE, shuffle=True)
+        validate_loader = DataLoader(validate_dataset, BATCH_SIZE, shuffle=False)
         
         model = LSTM.NetworkLSTM(INPUT_DIM, HIDDEN_DIM, STACKED_LAYERS)
         model.to(LSTM.DEVICE)
@@ -334,8 +338,8 @@ def main():
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
         for epoch in range(NUM_EPOCH):
-            train_epoch(model, training_loader, epoch, loss_function, optimizer)
-            validate_epoch(model, testing_loader, loss_function)
+            train_epoch(model, learn_loader, epoch, loss_function, optimizer)
+            validate_epoch(model, validate_loader, loss_function)
 
         #TODO add the nn training and detection here
 

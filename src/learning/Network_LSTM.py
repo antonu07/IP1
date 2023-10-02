@@ -33,8 +33,8 @@ class NetworkLSTM(nn.Module):
         out = self.sig(out)
         return out
 
-# Datasets definition
-class NetworkTrainingDataset(Dataset):
+# Dataset definition
+class NetworkDataset(Dataset):
     def __init__(self, X, y):
         self.X = X
         self.y = y
@@ -44,13 +44,3 @@ class NetworkTrainingDataset(Dataset):
     
     def __getitem__(self, i):
         return self.X[i], self.y[i]
-    
-class NetworkTestingDataset(Dataset):
-    def __init__(self, X):
-        self.X = X
-
-    def __len__(self):
-        return len(self.X)
-    
-    def __getitem__(self, i):
-        return self.X[i]
