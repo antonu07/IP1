@@ -34,9 +34,26 @@ import learning.alergia as alergia
 import parser.IEC104_parser as con_par
 import parser.IEC104_conv_parser as iec_prep_par
 
+
+import numpy
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
+import learning.Network_LSTM as LSTM
+
+#configuration
+BATCH_SIZE = 32
+INPUT_DIM = 2
+HIDDEN_DIM = 5
+STACKED_LAYERS = 1
+LEARNING_RATE = 0.001
+NUM_EPOCH = 10
+SEQUENCE_LEN = 10
+
 ComPairType = FrozenSet[Tuple[str,str]]
 rows_filter = ["asduType", "cot"]
-TRAINING = 1.0
+TRAINING = 0.33
 
 """
 Program parameters
@@ -145,6 +162,59 @@ def store_automata(csv_file, fa, alpha, t0, par=""):
     dot_fd.write(fa.to_dot(aggregate=False, legend=legend))
     dot_fd.close()
 
+"""
+Transform list of tuples to pytorch tensors
+"""
+def list_tensor(x):
+    x = numpy.array(x).astype(float)
+    x = torch.tensor(x, dtype=torch.float32)
+    return x
+
+"""
+Training function
+"""
+def train_epoch(model, training_loader, epoch, loss_function, optimizer):
+    model.train(True)
+    print(f'Epoch: {epoch + 1}')
+    running_loss = 0.0
+
+    for batch_index, batch in enumerate(training_loader):
+        x_batch, y_batch = batch[0].to(LSTM.DEVICE), batch[1].to(LSTM.DEVICE)
+        
+        output = model(x_batch)
+        loss = loss_function(output, y_batch)
+        running_loss += loss
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        if batch_index % 100 == 99:
+            avg_loss = running_loss / 100
+            print('Batch {0}, Loss: {1:.3f}'.format(batch_index + 1, avg_loss))
+            running_loss = 0.0
+    print()
+
+
+"""
+validation function
+"""
+def validate_epoch(model, testing_loader, loss_function):
+    model.train(False)
+    running_loss = 0.0
+
+    for batch_index, batch in enumerate(testing_loader):
+        x_batch, y_batch = batch[0].to(LSTM.DEVICE), batch[1].to(LSTM.DEVICE)
+
+        with torch.no_grad():
+            output = model(x_batch)
+            loss = loss_function(output, y_batch)
+            running_loss += loss
+
+    avg_loss = running_loss / len(testing_loader)
+
+    print('Val Loss: {0:.3f}'.format(avg_loss))
+    print('***********************************************')
+    print()
 
 """
 Main
@@ -230,7 +300,7 @@ def main():
             prob = fa.string_prob_deterministic(line)
             if prob is None:
                 miss += 1
-        
+
         print("File: {0} {1}".format(csv_file, ent_format(compr_parser.compair)))
         if (alpha is not None) and (t0 is not None):
             print("alpha: {0}, t0: {1}".format(alpha, t0))
@@ -239,6 +309,35 @@ def main():
         if len(testing) > 0:
             print("Accuracy: {0}".format((len(testing)-miss)/float(len(testing))))
 
+        for pair in testing:
+            print(pair)
+
+        # Preparing data for NN
+        x_training = list_tensor(training)
+        x_testing = list_tensor(testing)
+
+        # tensor of outputs for training
+        y_training = torch.ones(x_training.shape[0], 1)
+        y_testing = torch.ones(x_testing.shape[0], 1)
+
+        training_dataset = LSTM.NetworkTrainingDataset(x_training, y_training)
+        testing_dataset = LSTM.NetworkTrainingDataset(x_testing, y_testing)
+        #testing_dataset = LSTM.NetworkTestingDataset(x_testing)
+
+        training_loader = DataLoader(training_dataset, BATCH_SIZE, shuffle=True)
+        testing_loader = DataLoader(testing_dataset, BATCH_SIZE, shuffle=False)
+        
+        model = LSTM.NetworkLSTM(INPUT_DIM, HIDDEN_DIM, STACKED_LAYERS)
+        model.to(LSTM.DEVICE)
+
+        loss_function = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+        for epoch in range(NUM_EPOCH):
+            train_epoch(model, training_loader, epoch, loss_function, optimizer)
+            validate_epoch(model, testing_loader, loss_function)
+
+        #TODO add the nn training and detection here
 
 if __name__ == "__main__":
     main()
