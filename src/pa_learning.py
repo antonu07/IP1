@@ -47,12 +47,13 @@ INPUT_DIM = 2
 HIDDEN_DIM = 5
 STACKED_LAYERS = 1
 LEARNING_RATE = 0.001
-NUM_EPOCH = 10
-LEARNING = 0.75
+NUM_EPOCH = 5
+LEARNING = 0.80
+BATCH_PRINTOUT = 50
 
 ComPairType = FrozenSet[Tuple[str,str]]
 rows_filter = ["asduType", "cot"]
-TRAINING = 0.33
+TRAINING = 0.25
 
 """
 Program parameters
@@ -196,8 +197,8 @@ def train_epoch(model, learn_loader, epoch, loss_function, optimizer):
         loss.backward()
         optimizer.step()
         
-        if batch_index % 100 == 99:
-            avg_loss = running_loss / 100
+        if batch_index % BATCH_PRINTOUT == (BATCH_PRINTOUT - 1):
+            avg_loss = running_loss / BATCH_PRINTOUT
             print('Batch {0}, Loss: {1:.3f}'.format(batch_index + 1, avg_loss))
             running_loss = 0.0
     print()
@@ -345,7 +346,7 @@ def main():
         model.to(LSTM.DEVICE)
 
         # defining used algorithms for learning
-        loss_function = nn.CrossEntropyLoss()
+        loss_function = nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
         # learning loop
