@@ -35,7 +35,6 @@ import parser.IEC104_parser as con_par
 import parser.IEC104_conv_parser as iec_prep_par
 
 
-import numpy
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -163,12 +162,21 @@ def store_automata(csv_file, fa, alpha, t0, par=""):
     dot_fd.close()
 
 """
-Transform list of tuples to pytorch tensors
+Transform list of conversations to pytorch tensors
 """
-def list_tensor(x):
-    x = numpy.array(x).astype(float)
-    x = torch.tensor(x, dtype=torch.float32)
-    return x
+def list_tensor(x, conv_len):
+    ret = torch.tensor(())
+    tmp = torch.tensor((), dtype=torch.float32)
+
+    for conv in range(len(x)):
+        tmp = tmp.new_zeros(1, conv_len, INPUT_DIM)
+
+        for msg in range(len(x[conv])):
+            for input in range(INPUT_DIM):
+                tmp[0][msg][input] = float(x[conv][msg][input])
+
+        ret = torch.cat((ret, tmp))
+    return ret
 
 """
 Training function
@@ -309,39 +317,43 @@ def main():
         if len(testing) > 0:
             print("Accuracy: {0}".format((len(testing)-miss)/float(len(testing))))
 
-
         #split training data to learning and validation data
         index = int(len(training)*LEARNING)
         learn, validate = training[:index], training[index:]
 
-        #max conversation length
-        conv_len = max(len(row) for row in lines)
-
         # Preparing data for NN
+        conv_len = max(len(row) for row in learn)
         x_learn = list_tensor(learn, conv_len)
+
+        print(x_learn.shape)
+        conv_len = max(len(row) for row in validate)
         x_validate = list_tensor(validate, conv_len)
 
-        # tensor of outputs for training
+        # tensors of outputs for training
         y_learn = torch.ones(x_learn.shape[0], 1)
         y_validate = torch.ones(x_validate.shape[0], 1)
 
+        # datasets and dataloaders
         learn_dataset = LSTM.NetworkDataset(x_learn, y_learn)
         validate_dataset = LSTM.NetworkDataset(x_validate, y_validate)
 
         learn_loader = DataLoader(learn_dataset, BATCH_SIZE, shuffle=True)
         validate_loader = DataLoader(validate_dataset, BATCH_SIZE, shuffle=False)
         
+        # creating NN model
         model = LSTM.NetworkLSTM(INPUT_DIM, HIDDEN_DIM, STACKED_LAYERS)
         model.to(LSTM.DEVICE)
 
+        # defining used algorithms for learning
         loss_function = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
+        # learning loop
         for epoch in range(NUM_EPOCH):
             train_epoch(model, learn_loader, epoch, loss_function, optimizer)
             validate_epoch(model, validate_loader, loss_function)
 
-        #TODO add the nn training and detection here
+        #TODO add the nn detection here
 
 if __name__ == "__main__":
     main()
