@@ -42,26 +42,15 @@ from torch.utils.data import DataLoader
 import learning.Network_LSTM as LSTM
 
 # configuration
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 INPUT_DIM = 2
 HIDDEN_DIM = 5
 STACKED_LAYERS = 1
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.001
 NUM_EPOCH = 5
 LEARNING = 0.75
-BATCH_PRINTOUT = 50
-ACCEPT_PROB = 0.95
-
-# for scada attacs works ok
-# BATCH_SIZE = 32
-# INPUT_DIM = 2
-# HIDDEN_DIM = 5
-# STACKED_LAYERS = 1
-# LEARNING_RATE = 0.01
-# NUM_EPOCH = 5
-# LEARNING = 0.75
-# BATCH_PRINTOUT = 50
-# ACCEPT_PROB = 0.95
+BATCH_PRINTOUT = 25
+ACCEPT_RANGE = 0.05
 
 # enables NN learning printouts
 PRINTOUTS = True
@@ -366,7 +355,7 @@ def main():
         model.to(LSTM.DEVICE)
 
         # defining used algorithms for learning
-        loss_function = nn.L1Loss()
+        loss_function = nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
         # learning loop
@@ -385,7 +374,7 @@ def main():
 
         miss = 0
         for i in output:
-            if i < ACCEPT_PROB:
+            if ((i < (1 - ACCEPT_RANGE)) or (i > (1 + ACCEPT_RANGE))):
                 miss += 1
 
         print("Testing: {0}/{1} (missclassified/all)".format(miss, len(output)))

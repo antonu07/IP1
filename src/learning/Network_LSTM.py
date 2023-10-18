@@ -21,7 +21,7 @@ class NetworkLSTM(nn.Module):
 
         self.linear = nn.Linear(hidden_dim, 1)
 
-        self.sig = nn.Sigmoid()
+        self.sig = nn.ReLU()
 
     def forward(self, x):
         batch_size = x.size(0)
