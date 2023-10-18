@@ -42,18 +42,18 @@ from torch.utils.data import DataLoader
 import learning.Network_LSTM as LSTM
 
 # configuration
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 INPUT_DIM = 2
 HIDDEN_DIM = 5
 STACKED_LAYERS = 1
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.005
 NUM_EPOCH = 5
-LEARNING = 0.75
+LEARNING = 0.90
 BATCH_PRINTOUT = 25
-ACCEPT_RANGE = 0.05
+ACCEPT_RANGE = 0.075
 
 # enables NN learning printouts
-PRINTOUTS = True
+PRINTOUTS = False
 
 
 ComPairType = FrozenSet[Tuple[str,str]]
@@ -358,6 +358,10 @@ def main():
         loss_function = nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
+        if PRINTOUTS:
+            print('***********************************************')
+            print()
+
         # learning loop
         for epoch in range(NUM_EPOCH):
             train_epoch(model, learn_loader, epoch, loss_function, optimizer)
@@ -369,17 +373,15 @@ def main():
         test = list_tensor(testing, conv_len).to(LSTM.DEVICE)
         output = model(test)
 
-        if PRINTOUTS:
-            print(output)
-
-        miss = 0
+        det = 0
         for i in output:
             if ((i < (1 - ACCEPT_RANGE)) or (i > (1 + ACCEPT_RANGE))):
-                miss += 1
+                det += 1
 
-        print("Testing: {0}/{1} (missclassified/all)".format(miss, len(output)))
-        if len(testing) > 0:
-            print("Accuracy: {0}".format((len(output)-miss)/float(len(output))))
+        print("Testing: {0}/{1} (detected/all)".format(det, len(output)))
+
+        print('***********************************************')
+        print()
 
 
 if __name__ == "__main__":

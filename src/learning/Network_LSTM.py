@@ -21,8 +21,6 @@ class NetworkLSTM(nn.Module):
 
         self.linear = nn.Linear(hidden_dim, 1)
 
-        self.sig = nn.ReLU()
-
     def forward(self, x):
         batch_size = x.size(0)
         h0 = torch.zeros(self.num_stacked_layers, batch_size, self.hidden_dim).to(DEVICE)
@@ -30,7 +28,6 @@ class NetworkLSTM(nn.Module):
 
         out, _ = self.lstm(x, (h0, c0))
         out = self.linear(out[:, -1, :])
-        out = self.sig(out)
         return out
 
 # Dataset definition
