@@ -41,15 +41,31 @@ from torch.utils.data import DataLoader
 
 import learning.Network_LSTM as LSTM
 
-#configuration
-BATCH_SIZE = 32
+# configuration
+BATCH_SIZE = 16
 INPUT_DIM = 2
 HIDDEN_DIM = 5
 STACKED_LAYERS = 1
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.01
 NUM_EPOCH = 5
-LEARNING = 0.80
+LEARNING = 0.75
 BATCH_PRINTOUT = 50
+ACCEPT_PROB = 0.95
+
+# for scada attacs works ok
+# BATCH_SIZE = 32
+# INPUT_DIM = 2
+# HIDDEN_DIM = 5
+# STACKED_LAYERS = 1
+# LEARNING_RATE = 0.01
+# NUM_EPOCH = 5
+# LEARNING = 0.75
+# BATCH_PRINTOUT = 50
+# ACCEPT_PROB = 0.95
+
+# enables NN learning printouts
+PRINTOUTS = True
+
 
 ComPairType = FrozenSet[Tuple[str,str]]
 rows_filter = ["asduType", "cot"]
@@ -184,24 +200,29 @@ Training function
 """
 def train_epoch(model, learn_loader, epoch, loss_function, optimizer):
     model.train(True)
-    print(f'Epoch: {epoch + 1}')
-    running_loss = 0.0
+    if PRINTOUTS:
+        print(f'Epoch: {epoch + 1}')
+        running_loss = 0.0
 
     for batch_index, batch in enumerate(learn_loader):
         x_batch, y_batch = batch[0].to(LSTM.DEVICE), batch[1].to(LSTM.DEVICE)
         
         output = model(x_batch)
         loss = loss_function(output, y_batch)
-        running_loss += loss
+        if PRINTOUTS:
+            running_loss += loss
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         
-        if batch_index % BATCH_PRINTOUT == (BATCH_PRINTOUT - 1):
-            avg_loss = running_loss / BATCH_PRINTOUT
-            print('Batch {0}, Loss: {1:.3f}'.format(batch_index + 1, avg_loss))
-            running_loss = 0.0
-    print()
+        if PRINTOUTS:
+            if batch_index % BATCH_PRINTOUT == (BATCH_PRINTOUT - 1):
+                avg_loss = running_loss / BATCH_PRINTOUT
+                print('Batch {0}, Loss: {1:.3f}'.format(batch_index + 1, avg_loss))
+                running_loss = 0.0
+    
+    if PRINTOUTS:
+        print()
 
 
 """
@@ -326,7 +347,6 @@ def main():
         conv_len = max(len(row) for row in learn)
         x_learn = list_tensor(learn, conv_len)
 
-        print(x_learn.shape)
         conv_len = max(len(row) for row in validate)
         x_validate = list_tensor(validate, conv_len)
 
@@ -346,15 +366,32 @@ def main():
         model.to(LSTM.DEVICE)
 
         # defining used algorithms for learning
-        loss_function = nn.MSELoss()
+        loss_function = nn.L1Loss()
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
         # learning loop
         for epoch in range(NUM_EPOCH):
             train_epoch(model, learn_loader, epoch, loss_function, optimizer)
-            validate_epoch(model, validate_loader, loss_function)
+            if PRINTOUTS:
+                validate_epoch(model, validate_loader, loss_function)
 
         #TODO add the nn detection here
+        conv_len = max(len(row) for row in testing)
+        test = list_tensor(testing, conv_len).to(LSTM.DEVICE)
+        output = model(test)
+
+        if PRINTOUTS:
+            print(output)
+
+        miss = 0
+        for i in output:
+            if i < ACCEPT_PROB:
+                miss += 1
+
+        print("Testing: {0}/{1} (missclassified/all)".format(miss, len(output)))
+        if len(testing) > 0:
+            print("Accuracy: {0}".format((len(output)-miss)/float(len(output))))
+
 
 if __name__ == "__main__":
     main()
