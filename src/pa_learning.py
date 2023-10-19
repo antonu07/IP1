@@ -46,11 +46,12 @@ BATCH_SIZE = 16
 INPUT_DIM = 2
 HIDDEN_DIM = 5
 STACKED_LAYERS = 1
-LEARNING_RATE = 0.005
-NUM_EPOCH = 5
-LEARNING = 0.90
+LEARNING_RATE = 0.0005
+MAX_EPOCH = 100
+STOP_EARLY_THRESHOLD = 0.0001
+LEARNING = 0.85
 BATCH_PRINTOUT = 25
-ACCEPT_RANGE = 0.075
+ACCEPT_RANGE = 0.05
 
 # enables NN learning printouts
 PRINTOUTS = False
@@ -231,9 +232,26 @@ def validate_epoch(model, validate_loader, loss_function):
 
     avg_loss = running_loss / len(validate_loader)
 
-    print('Val Loss: {0:.3f}'.format(avg_loss))
-    print('***********************************************')
-    print()
+    if PRINTOUTS:
+        print('Val Loss: {0:.3f}'.format(avg_loss))
+        print('***********************************************')
+        print()
+
+    return avg_loss
+
+"""
+NN checkpoint creation
+"""
+def checkpoint(model, filename):
+    torch.save(model.state_dict(), filename)
+
+
+"""
+NN checkpoint load
+"""
+def resume(model, filename):
+    model.load_state_dict(torch.load(filename))
+
 
 """
 Main
@@ -362,11 +380,25 @@ def main():
             print('***********************************************')
             print()
 
+        # variable for stopping training loop
+        best_loss = 100
+
         # learning loop
-        for epoch in range(NUM_EPOCH):
+        for epoch in range(MAX_EPOCH):
             train_epoch(model, learn_loader, epoch, loss_function, optimizer)
-            if PRINTOUTS:
-                validate_epoch(model, validate_loader, loss_function)
+            loss = validate_epoch(model, validate_loader, loss_function)
+
+            # saving best model
+            if(loss < best_loss):
+                checkpoint(model, "model.pth")
+
+            # if model doesnt improve stop loop
+            if(loss < STOP_EARLY_THRESHOLD):
+                print("Training stopped early at epoch: {0}".format(epoch))
+                break
+
+        # loading model
+        resume(model, "model.pth")
 
         #TODO add the nn detection here
         conv_len = max(len(row) for row in testing)
@@ -378,7 +410,7 @@ def main():
             if ((i < (1 - ACCEPT_RANGE)) or (i > (1 + ACCEPT_RANGE))):
                 det += 1
 
-        print("Testing: {0}/{1} (detected/all)".format(det, len(output)))
+        print("Testing NN: {0}/{1} (detected/all)".format(det, len(output)))
 
         print('***********************************************')
         print()
