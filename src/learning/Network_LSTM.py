@@ -17,7 +17,7 @@ class NetworkLSTM(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_stacked_layers = num_stacked_layers
 
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_stacked_layers ,batch_first=True, proj_size=0)
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_stacked_layers, batch_first=True, proj_size=0)
 
         self.linear = nn.Linear(hidden_dim, 1)
 
