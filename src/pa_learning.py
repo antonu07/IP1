@@ -42,19 +42,14 @@ from torch.utils.data import DataLoader
 import learning.Network_LSTM as LSTM
 
 # configuration
-BATCH_SIZE = 16
+BATCH_SIZE = 128
 INPUT_DIM = 2
-MAX_HIDDEN_DIM = 10
+MAX_HIDDEN_DIM = 5
 MAX_STACKED_LAYERS = 5
-LEARNING_RATE = 0.001
-MAX_EPOCH = 100
+LEARNING_RATE = 0.0001
+MAX_EPOCH = 50
 STOP_EARLY_THRESHOLD = 5
 LEARNING = 0.85
-BATCH_PRINTOUT = 25
-ACCEPT_RANGE = 0.05
-
-# enables NN learning printouts
-PRINTOUTS = False
 
 
 ComPairType = FrozenSet[Tuple[str,str]]
@@ -190,30 +185,15 @@ Training function
 """
 def train_epoch(model, learn_loader, epoch, loss_function, optimizer):
     model.train(True)
-    if PRINTOUTS:
-        print(f'Epoch: {epoch + 1}')
-        running_loss = 0.0
 
     for batch_index, batch in enumerate(learn_loader):
         x_batch, y_batch = batch[0].to(LSTM.DEVICE), batch[1].to(LSTM.DEVICE)
         
         output = model(x_batch)
         loss = loss_function(output, y_batch)
-        if PRINTOUTS:
-            running_loss += loss
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        
-        if PRINTOUTS:
-            if batch_index % BATCH_PRINTOUT == (BATCH_PRINTOUT - 1):
-                avg_loss = running_loss / BATCH_PRINTOUT
-                print('Batch {0}, Loss: {1:.3f}'.format(batch_index + 1, avg_loss))
-                running_loss = 0.0
-    
-    if PRINTOUTS:
-        print()
-
 
 """
 validation function
@@ -231,11 +211,6 @@ def validate_epoch(model, validate_loader, loss_function):
             running_loss += loss
 
     avg_loss = running_loss / len(validate_loader)
-
-    if PRINTOUTS:
-        print('Val Loss: {0:.3f}'.format(avg_loss))
-        print('***********************************************')
-        print()
 
     return avg_loss
 
@@ -347,11 +322,6 @@ def main():
 
         # defining used loss function
         loss_function = nn.MSELoss()
-        
-
-        if PRINTOUTS:
-            print('***********************************************')
-            print()
 
         # varibles for picking best model
         best_loss_overall = 100
@@ -361,7 +331,7 @@ def main():
         for stacked_layers in range(MAX_STACKED_LAYERS):
             for hidden_dimension in range(MAX_HIDDEN_DIM):
                 # creating NN model, and optimizer
-                model = LSTM.NetworkLSTM(INPUT_DIM, hidden_dimension, stacked_layers)
+                model = LSTM.NetworkLSTM(INPUT_DIM, (hidden_dimension + 1), (stacked_layers + 1))
                 model.to(LSTM.DEVICE)
                 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
@@ -384,20 +354,21 @@ def main():
 
                     # if model doesnt improve stop loop
                     if(epoch - best_epoch > STOP_EARLY_THRESHOLD):
-                        print("Training ({0} stacked layers and {1} hidden dimension) stopped early at epoch: {2}".format(stacked_layers, hidden_dimension ,epoch))
-                        best_layer = stacked_layers
-                        best_dimension = hidden_dimension
+                        print("Training ({0} stacked layers and {1} hidden dimension) stopped early at epoch: {2}".format((stacked_layers + 1), (hidden_dimension + 1), epoch))
                         break
-                
+                    
+                print("Loss ({0} stacked layers and {1} hidden dimension): %e".format((stacked_layers + 1), (hidden_dimension + 1)) % best_loss)
+
                 if(best_loss < best_loss_overall):
                     best_loss_overall = best_loss
-                    del model
+                    best_layer = (stacked_layers + 1)
+                    best_dimension = (hidden_dimension + 1)
                     resume(model, "model.pth")
                     checkpoint(model, "best.pth")
-                    
-                del model
+
 
         print("Best model found with: {0} stacked layers, {1} hidden dimension".format(best_layer, best_dimension))
+        print("Best loss: %e" % best_loss_overall)
 
 
 if __name__ == "__main__":
