@@ -44,11 +44,11 @@ import learning.Network_LSTM as LSTM
 # configuration
 BATCH_SIZE = 16
 INPUT_DIM = 2
-HIDDEN_DIM = 5
-STACKED_LAYERS = 1
-LEARNING_RATE = 0.0005
+MAX_HIDDEN_DIM = 10
+MAX_STACKED_LAYERS = 5
+LEARNING_RATE = 0.001
 MAX_EPOCH = 100
-STOP_EARLY_THRESHOLD = 0.0001
+STOP_EARLY_THRESHOLD = 5
 LEARNING = 0.85
 BATCH_PRINTOUT = 25
 ACCEPT_RANGE = 0.05
@@ -321,30 +321,7 @@ def main():
 
         lines = compr_parser.get_all_conversations(abstraction)
         index = int(len(lines)*TRAINING)
-        training, testing = lines[:index], lines[index:]
-
-        try:
-            fa, alpha, t0 = learn_fnc(training)
-        except Exception as e:
-            sys.stderr.write("Learning error {0}: {1}\n".format(csv_file, e))
-            sys.exit(1)
-
-        par = ent_format(compr_parser.compair)
-        store_automata(csv_file, fa, alpha, t0, par)
-
-        miss = 0
-        for line in testing:
-            prob = fa.string_prob_deterministic(line)
-            if prob is None:
-                miss += 1
-
-        print("File: {0} {1}".format(csv_file, ent_format(compr_parser.compair)))
-        if (alpha is not None) and (t0 is not None):
-            print("alpha: {0}, t0: {1}".format(alpha, t0))
-        print("States {0}".format(len(fa.get_states())))
-        print("Testing: {0}/{1} (missclassified/all)".format(miss, len(testing)))
-        if len(testing) > 0:
-            print("Accuracy: {0}".format((len(testing)-miss)/float(len(testing))))
+        training = lines[:index]
 
         #split training data to learning and validation data
         index = int(len(training)*LEARNING)
@@ -367,53 +344,60 @@ def main():
 
         learn_loader = DataLoader(learn_dataset, BATCH_SIZE, shuffle=True)
         validate_loader = DataLoader(validate_dataset, BATCH_SIZE, shuffle=False)
-        
-        # creating NN model
-        model = LSTM.NetworkLSTM(INPUT_DIM, HIDDEN_DIM, STACKED_LAYERS)
-        model.to(LSTM.DEVICE)
 
-        # defining used algorithms for learning
+        # defining used loss function
         loss_function = nn.MSELoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+        
 
         if PRINTOUTS:
             print('***********************************************')
             print()
 
-        # variable for stopping training loop
-        best_loss = 100
+        # varibles for picking best model
+        best_loss_overall = 100
+        best_layer = 0
+        best_dimension = 0
 
-        # learning loop
-        for epoch in range(MAX_EPOCH):
-            train_epoch(model, learn_loader, epoch, loss_function, optimizer)
-            loss = validate_epoch(model, validate_loader, loss_function)
+        for stacked_layers in range(MAX_STACKED_LAYERS):
+            for hidden_dimension in range(MAX_HIDDEN_DIM):
+                # creating NN model, and optimizer
+                model = LSTM.NetworkLSTM(INPUT_DIM, hidden_dimension, stacked_layers)
+                model.to(LSTM.DEVICE)
+                optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-            # saving best model
-            if(loss < best_loss):
-                checkpoint(model, "model.pth")
+                # variable for stopping training loop
+                best_loss = 100
+                best_epoch = 0
 
-            # if model doesnt improve stop loop
-            if(loss < STOP_EARLY_THRESHOLD):
-                print("Training stopped early at epoch: {0}".format(epoch))
-                break
+                # learning loop
+                for epoch in range(MAX_EPOCH):
+                    train_epoch(model, learn_loader, epoch, loss_function, optimizer)
+                    loss = validate_epoch(model, validate_loader, loss_function)
+                    loss = math.sqrt(loss)
 
-        # loading model
-        resume(model, "model.pth")
+                    # saving best model
+                    if(loss < best_loss):
+                        best_loss = loss
+                        best_epoch = epoch
+                        checkpoint(model, "model.pth")
+                        
 
-        #TODO add the nn detection here
-        conv_len = max(len(row) for row in testing)
-        test = list_tensor(testing, conv_len).to(LSTM.DEVICE)
-        output = model(test)
+                    # if model doesnt improve stop loop
+                    if(epoch - best_epoch > STOP_EARLY_THRESHOLD):
+                        print("Training ({0} stacked layers and {1} hidden dimension) stopped early at epoch: {2}".format(stacked_layers, hidden_dimension ,epoch))
+                        best_layer = stacked_layers
+                        best_dimension = hidden_dimension
+                        break
+                
+                if(best_loss < best_loss_overall):
+                    best_loss_overall = best_loss
+                    del model
+                    resume(model, "model.pth")
+                    checkpoint(model, "best.pth")
+                    
+                del model
 
-        det = 0
-        for i in output:
-            if ((i < (1 - ACCEPT_RANGE)) or (i > (1 + ACCEPT_RANGE))):
-                det += 1
-
-        print("Testing NN: {0}/{1} (detected/all)".format(det, len(output)))
-
-        print('***********************************************')
-        print()
+        print("Best model found with: {0} stacked layers, {1} hidden dimension".format(best_layer, best_dimension))
 
 
 if __name__ == "__main__":
