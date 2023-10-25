@@ -44,8 +44,8 @@ import learning.Network_LSTM as LSTM
 # configuration
 BATCH_SIZE = 128
 INPUT_DIM = 2
-MAX_HIDDEN_DIM = 5
-MAX_STACKED_LAYERS = 5
+MAX_HIDDEN_DIM = 2
+MAX_STACKED_LAYERS = 2
 LEARNING_RATE = 0.0001
 MAX_EPOCH = 50
 STOP_EARLY_THRESHOLD = 5
@@ -298,7 +298,12 @@ def main():
         index = int(len(lines)*TRAINING)
         training = lines[:index]
 
-        #split training data to learning and validation data
+        # file name for best model for comunication pair
+        par = ent_format(compr_parser.compair)
+        file_name = os.path.splitext(os.path.basename(csv_file))[0]
+        file_name = "{0}{1}.pth".format(file_name, par)
+
+        # split training data to learning and validation data
         index = int(len(training)*LEARNING)
         learn, validate = training[:index], training[index:]
 
@@ -364,9 +369,9 @@ def main():
                     best_layer = (stacked_layers + 1)
                     best_dimension = (hidden_dimension + 1)
                     resume(model, "model.pth")
-                    checkpoint(model, "best.pth")
+                    checkpoint(model, file_name)
 
-
+        os.remove("model.pth")
         print("Best model found with: {0} stacked layers, {1} hidden dimension".format(best_layer, best_dimension))
         print("Best loss: %e" % best_loss_overall)
 
