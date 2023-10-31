@@ -42,11 +42,11 @@ from torch.utils.data import DataLoader
 import learning.Network_LSTM as LSTM
 
 # configuration
-BATCH_SIZE = 128
+BATCH_COUNT = 50
 INPUT_DIM = 2
-MAX_HIDDEN_DIM = 2
+MAX_HIDDEN_DIM = 5
 MAX_STACKED_LAYERS = 2
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.0005
 MAX_EPOCH = 50
 STOP_EARLY_THRESHOLD = 5
 LEARNING = 0.85
@@ -322,8 +322,9 @@ def main():
         learn_dataset = LSTM.NetworkDataset(x_learn, y_learn)
         validate_dataset = LSTM.NetworkDataset(x_validate, y_validate)
 
-        learn_loader = DataLoader(learn_dataset, BATCH_SIZE, shuffle=True)
-        validate_loader = DataLoader(validate_dataset, BATCH_SIZE, shuffle=False)
+        batch_size = (int)(index/BATCH_COUNT)
+        learn_loader = DataLoader(learn_dataset, batch_size, shuffle=True)
+        validate_loader = DataLoader(validate_dataset, batch_size, shuffle=False)
 
         # defining used loss function
         loss_function = nn.MSELoss()
