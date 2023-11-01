@@ -42,11 +42,11 @@ from torch.utils.data import DataLoader
 import learning.Network_LSTM as LSTM
 
 # configuration
-BATCH_COUNT = 50
+BATCH_COUNT = 75
 INPUT_DIM = 2
 MAX_HIDDEN_DIM = 5
 MAX_STACKED_LAYERS = 2
-LEARNING_RATE = 0.0005
+LEARNING_RATE = 0.0001
 MAX_EPOCH = 50
 STOP_EARLY_THRESHOLD = 5
 LEARNING = 0.85
@@ -327,7 +327,7 @@ def main():
         validate_loader = DataLoader(validate_dataset, batch_size, shuffle=False)
 
         # defining used loss function
-        loss_function = nn.MSELoss()
+        loss_function = nn.L1Loss()
 
         # varibles for picking best model
         best_loss_overall = 100
@@ -349,7 +349,6 @@ def main():
                 for epoch in range(MAX_EPOCH):
                     train_epoch(model, learn_loader, epoch, loss_function, optimizer)
                     loss = validate_epoch(model, validate_loader, loss_function)
-                    loss = math.sqrt(loss)
 
                     # saving best model
                     if(loss < best_loss):
