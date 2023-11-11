@@ -290,6 +290,10 @@ def main():
     except KeyError as e:
         sys.stderr.write("Missing column in the input csv: {0}\n".format(e))
         sys.exit(1)
+    
+    file_path = os.path.splitext(os.path.basename(csv_file))[0]
+    if not os.path.exists(file_path):
+        os.mkdir(file_path)
 
     for compr_parser in parser.split_communication_pairs():
         compr_parser.parse_conversations()
@@ -300,8 +304,7 @@ def main():
 
         # file name for best model for comunication pair
         par = ent_format(compr_parser.compair)
-        file_name = os.path.splitext(os.path.basename(csv_file))[0]
-        file_name = "{0}{1}.pth".format(file_name, par)
+        file_name = "{0}/{1}.pth".format(file_path, par)
 
         # split training data to learning and validation data
         index = int(len(training)*LEARNING)
