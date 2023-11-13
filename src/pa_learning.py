@@ -218,14 +218,15 @@ def validate_epoch(model, validate_loader, loss_function):
 NN checkpoint creation
 """
 def checkpoint(model, filename):
-    torch.save(model.state_dict(), filename)
+    torch.save([model.args, model.state_dict()], filename)
 
 
 """
 NN checkpoint load
 """
 def resume(model, filename):
-    model.load_state_dict(torch.load(filename))
+    _, state = torch.load(filename)
+    model.load_state_dict(state)
 
 
 """
@@ -318,8 +319,8 @@ def main():
         x_validate = list_tensor(validate, conv_len)
 
         # tensors of outputs for training
-        y_learn = torch.ones(x_learn.shape[0], 1)
-        y_validate = torch.ones(x_validate.shape[0], 1)
+        y_learn = torch.zeros(x_learn.shape[0], 1)
+        y_validate = torch.zeros(x_validate.shape[0], 1)
 
         # datasets and dataloaders
         learn_dataset = LSTM.NetworkDataset(x_learn, y_learn)
