@@ -43,7 +43,6 @@ import learning.Network_LSTM as LSTM
 
 # configuration
 BATCH_COUNT = 75
-INPUT_DIM = 2
 MAX_HIDDEN_DIM = 10
 MAX_STACKED_LAYERS = 2
 LEARNING_RATE = 0.0001
@@ -54,7 +53,8 @@ LEARNING = 0.85
 
 ComPairType = FrozenSet[Tuple[str,str]]
 rows_filter = ["asduType", "cot"]
-TRAINING = 0.25
+INPUT_DIM = len(rows_filter)
+TRAINING = 1
 
 """
 Program parameters
@@ -163,22 +163,7 @@ def store_automata(csv_file, fa, alpha, t0, par=""):
     dot_fd.write(fa.to_dot(aggregate=False, legend=legend))
     dot_fd.close()
 
-"""
-Transform list of conversations to pytorch tensors
-"""
-def list_tensor(x, conv_len):
-    ret = torch.tensor(())
-    tmp = torch.tensor((), dtype=torch.float32)
 
-    for conv in range(len(x)):
-        tmp = tmp.new_zeros(1, conv_len, INPUT_DIM)
-
-        for msg in range(len(x[conv])):
-            for input in range(INPUT_DIM):
-                tmp[0][msg][input] = float(x[conv][msg][input])
-
-        ret = torch.cat((ret, tmp))
-    return ret
 
 """
 Training function
@@ -213,20 +198,6 @@ def validate_epoch(model, validate_loader, loss_function):
     avg_loss = running_loss / len(validate_loader)
 
     return avg_loss
-
-"""
-NN checkpoint creation
-"""
-def checkpoint(model, filename):
-    torch.save([model.args, model.state_dict()], filename)
-
-
-"""
-NN checkpoint load
-"""
-def resume(model, filename):
-    _, state = torch.load(filename)
-    model.load_state_dict(state)
 
 
 """
@@ -313,10 +284,10 @@ def main():
 
         # Preparing data for NN
         conv_len = max(len(row) for row in learn)
-        x_learn = list_tensor(learn, conv_len)
+        x_learn = LSTM.list_tensor(learn, conv_len, INPUT_DIM)
 
         conv_len = max(len(row) for row in validate)
-        x_validate = list_tensor(validate, conv_len)
+        x_validate = LSTM.list_tensor(validate, conv_len, INPUT_DIM)
 
         # tensors of outputs for training
         y_learn = torch.zeros(x_learn.shape[0], 1)
@@ -358,7 +329,7 @@ def main():
                     if(loss < best_loss):
                         best_loss = loss
                         best_epoch = epoch
-                        checkpoint(model, "model.pth")
+                        LSTM.checkpoint(model, "model.pth")
                         
 
                     # if model doesnt improve stop loop
@@ -372,8 +343,8 @@ def main():
                     best_loss_overall = best_loss
                     best_layer = (stacked_layers + 1)
                     best_dimension = (hidden_dimension + 1)
-                    resume(model, "model.pth")
-                    checkpoint(model, file_name)
+                    LSTM.resume(model, "model.pth")
+                    LSTM.checkpoint(model, file_name)
 
         os.remove("model.pth")
         print("Best model found with: {0} stacked layers, {1} hidden dimension".format(best_layer, best_dimension))

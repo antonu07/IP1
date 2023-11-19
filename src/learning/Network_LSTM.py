@@ -42,3 +42,36 @@ class NetworkDataset(Dataset):
     
     def __getitem__(self, i):
         return self.X[i], self.y[i]
+    
+
+"""
+Transform list of conversations to pytorch tensors
+"""
+def list_tensor(x, conv_len, input_dim):
+    ret = torch.tensor(())
+    tmp = torch.tensor((), dtype=torch.float32)
+
+    for conv in range(len(x)):
+        tmp = tmp.new_zeros(1, conv_len, input_dim)
+
+        for msg in range(len(x[conv])):
+            for input in range(input_dim):
+                tmp[0][msg][input] = float(x[conv][msg][input])
+
+        ret = torch.cat((ret, tmp))
+    return ret
+
+
+"""
+NN checkpoint creation
+"""
+def checkpoint(model, filename):
+    torch.save([model.args, model.state_dict()], filename)
+
+
+"""
+NN checkpoint load
+"""
+def resume(model, filename):
+    _, state = torch.load(filename)
+    model.load_state_dict(state)
