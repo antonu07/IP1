@@ -45,6 +45,13 @@ import detection.distr_comparison as distr
 import detection.member as mem
 import parser.IEC104_conv_parser as iec_prep_par
 
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
+import learning.Network_LSTM as LSTM
+
 SPARSE = False
 
 rows_filter_normal = ["asduType", "cot"]
@@ -206,7 +213,7 @@ def learn_golden_member(parser: con_base.ConvParserBase, learn_proc: Callable, p
 Print help message
 """
 def print_help():
-    print("./anomaly_distr <valid traffic csv> <anomaly csv> [OPT]")
+    print("./anomaly_distr <directory with models generated from valid comunication> <anomaly csv> [OPT]")
     print("OPT are from the following: ")
     print("\t--atype=pa/pta\t\tlearning based on PAs/PTAs (default PA)")
     print("\t--alg=distr/member\tanomaly detection based on comparing distributions (distr) or single message reasoning (member) (default distr)")
@@ -215,6 +222,43 @@ def print_help():
     print("\t--reduced=val\t\tremove similar automata with the error upper-bound val [0,1] (for distr only)")
     print("\t--threshold=val\t\tdetect anomalies with a given threshold (for distr only)")
     print("\t--help\t\t\tprint this message")
+
+
+"""
+NN checkpoint load
+"""
+def resume(filename):
+    args, state = torch.load(filename)
+    model = LSTM.NetworkLSTM(**args)
+    model.load_state_dict(state)
+    return model
+
+
+"""
+Load models from directory
+"""
+def load_models(parser: con_base.ConvParserBase, par: Params) -> dict[ComPairType, AutListType]:
+    ret: dict[ComPairType, AutListType] = defaultdict(lambda: [None])
+    parser_com = parser.split_communication_pairs()
+
+    for item in parser_com:
+
+        [(fip, fp), (sip, sp)] = list(item.compair)
+        # two posible names for model
+        file_name1 = "{0}/{1}v{2}--{3}v{4}.pth".format(par.normal_file, fip, fp, sip, sp)
+        file_name2 = "{0}/{1}v{2}--{3}v{4}.pth".format(par.normal_file, sip, sp, fip, fp)
+
+        try:
+            if os.path.isfile(file_name1):
+                ret[item.compair].append(resume(file_name1))
+
+            else:
+                ret[item.compair].append(resume(file_name2))
+        except FileNotFoundError:
+            sys.stderr.write("Cannot open input file\n")
+            sys.exit(1)
+
+    return ret
 
 
 """
@@ -272,55 +316,42 @@ def main():
     par.normal_file = sys.argv[1]
     par.test_file = sys.argv[2]
 
+    if not os.path.exists(par.normal_file):
+        sys.stderr.write("Directory with models doesn't exist\n")
+        sys.exit(1)
+
     try:
-        normal_fd = open(par.normal_file, "r")
-        normal_msgs = con_par.get_messages(normal_fd)
         test_fd = open(par.test_file, "r")
         test_msgs = con_par.get_messages(test_fd)
-        normal_fd.close()
         test_fd.close()
     except FileNotFoundError:
-        sys.stderr.write("Cannot open input files\n")
+        sys.stderr.write("Cannot open input file\n")
         sys.exit(1)
 
     if par.file_format == InputFormat.IPFIX:
-        normal_parser = con_par.IEC104Parser(normal_msgs)
         test_parser = con_par.IEC104Parser(test_msgs)
     elif par.file_format == InputFormat.CONV:
-        normal_parser = iec_prep_par.IEC104ConvParser(normal_msgs)
         test_parser = iec_prep_par.IEC104ConvParser(test_msgs)
 
     try:
-        golden_map = golden_proc(normal_parser, learn_proc, par)
+        models = load_models(test_parser, par)
     except KeyError as e:
         sys.stderr.write("Missing column in the input csv: {0}\n".format(e))
         sys.exit(1)
 
-    if par.alg == Algorithms.DISTR:
-        anom = distr.AnomDistrComparison(golden_map, learn_proc)
-        anom.remove_identical()
-        if par.reduced is not None:
-            anom.remove_euclid_similar(par.reduced)
-        print("Automata counts: ")
-        for k,v in anom.golden_map.items():
-            print("{0} | {1}".format(ent_format(k), len(v)))
-        print()
-    elif par.alg == Algorithms.MEMBER:
-        anom = mem.AnomMember(golden_map, learn_proc)
-
+    # TODO detekce a prevod vstupu na tensory
 
     anomalies = defaultdict(lambda: dict())
-    if (par.alg == Algorithms.DISTR) and (par.threshold is not None):
-        golden_map_member = learn_golden_member(normal_parser, learn_proc, par)
-        anom_member = mem.AnomMember(golden_map_member, learn_proc)
     res = defaultdict(lambda: [])
     test_com = test_parser.split_communication_pairs()
     last = 0
     acc = par.threshold if ACCELERATE and par.threshold is not None else 0.0
 
+    # TODO tohle rozdeli komunikaci na pary (pro ktery mam modely nauceny)
     for item in test_com:
         cnt = 0
         wns = item.split_to_windows(DURATION)
+        # TODO tady prochazlim jednotlivy okna a ohodnotim ho, ohodnoceni pripnu do dictionary res
         for window in wns:
             window.parse_conversations()
             r = anom.detect(window.get_all_conversations(abstraction), item.compair, acc)
@@ -353,31 +384,6 @@ def main():
                 if i == last:
                     continue
                 print("{0};{1}".format(i, [ it for its in v[i] for it in its ]))
-
-    if (par.alg == Algorithms.DISTR) and (par.threshold is not None):
-        print("\nPossibly problematic conversations: ")
-        for ent, windows in anomalies.items():
-            for i, det in windows.items():
-                if i == last:
-                    continue
-                print("Communicating: {0}; Window: {1}".format(ent_format(ent), i))
-
-                print("Bad conversations:")
-                tmp = [k for k,v in itertools.groupby(sorted(det.bad_conv))]
-                print(conv_list_format(tmp))
-
-                #aut = det.model_aut
-                #aut.__class__ = core_wfa_export.CoreWFAExport
-                #print(aut.to_dot())
-
-                print("Missing conversation:")
-                if det.model_aut is None:
-                    print("empty model")
-                else:
-                    word, pr = det.model_aut.difference_dwfa(det.test_aut).get_most_probable_string()
-                    print(conv_format(word), pr)
-
-                print()
 
 
 if __name__ == "__main__":
