@@ -13,6 +13,7 @@ class NetworkLSTM(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, num_stacked_layers):
         super().__init__()
+        self.args = {'input_dim': input_dim, 'hidden_dim': hidden_dim, 'num_stacked_layers': num_stacked_layers}
 
         self.hidden_dim = hidden_dim
         self.num_stacked_layers = num_stacked_layers
