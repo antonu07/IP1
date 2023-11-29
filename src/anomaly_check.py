@@ -47,18 +47,17 @@ import parser.IEC104_conv_parser as iec_prep_par
 
 
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-
 import learning.Network_LSTM as LSTM
 
 SPARSE = False
 
 rows_filter_normal = ["asduType", "cot"]
+INPUT_DIM = len(rows_filter_normal)
 DURATION = 300
 AGGREGATE = True
 ACCELERATE = False
 
+Model_exists = True
 
 ComPairType = FrozenSet[Tuple[str,str]]
 AutListType = List[Union[core_wfa_export.CoreWFAExport,None]]
@@ -225,40 +224,36 @@ def print_help():
 
 
 """
-NN checkpoint load
+Initialize learned model
 """
-def resume(filename):
+def init_model(filename):
     args, state = torch.load(filename)
     model = LSTM.NetworkLSTM(**args)
     model.load_state_dict(state)
     return model
 
-
 """
-Load models from directory
+Load model from directory
 """
-def load_models(parser: con_base.ConvParserBase, par: Params) -> dict[ComPairType, AutListType]:
-    ret: dict[ComPairType, AutListType] = defaultdict(lambda: [None])
-    parser_com = parser.split_communication_pairs()
+def load_model(item, par):
 
-    for item in parser_com:
+    [(fip, fp), (sip, sp)] = list(item.compair)
+    # two posible names for model
+    file_name1 = "{0}/{1}v{2}--{3}v{4}.pth".format(par.normal_file, fip, fp, sip, sp)
+    file_name2 = "{0}/{1}v{2}--{3}v{4}.pth".format(par.normal_file, sip, sp, fip, fp)
+    global Model_exists
 
-        [(fip, fp), (sip, sp)] = list(item.compair)
-        # two posible names for model
-        file_name1 = "{0}/{1}v{2}--{3}v{4}.pth".format(par.normal_file, fip, fp, sip, sp)
-        file_name2 = "{0}/{1}v{2}--{3}v{4}.pth".format(par.normal_file, sip, sp, fip, fp)
+    if os.path.isfile(file_name1):
+        return init_model(file_name1)
+        Model_exists = True
 
-        try:
-            if os.path.isfile(file_name1):
-                ret[item.compair].append(resume(file_name1))
+    elif os.path.isfile(file_name2):
+        return init_model(file_name2)
+        Model_exists = True
 
-            else:
-                ret[item.compair].append(resume(file_name2))
-        except FileNotFoundError:
-            sys.stderr.write("Cannot open input file\n")
-            sys.exit(1)
+    else:
+        Model_exists = False
 
-    return ret
 
 
 """
@@ -310,7 +305,7 @@ def main():
             sys.stderr.write("Error: bad parameters (try --help)\n")
             sys.exit(1)
 
-    if len(args) < 3:
+    if len(args) < 2:
         sys.stderr.write("Missing input files (try --help)\n")
         sys.exit(1)
     par.normal_file = sys.argv[1]
@@ -333,12 +328,6 @@ def main():
     elif par.file_format == InputFormat.CONV:
         test_parser = iec_prep_par.IEC104ConvParser(test_msgs)
 
-    try:
-        models = load_models(test_parser, par)
-    except KeyError as e:
-        sys.stderr.write("Missing column in the input csv: {0}\n".format(e))
-        sys.exit(1)
-
     # TODO detekce a prevod vstupu na tensory
 
     anomalies = defaultdict(lambda: dict())
@@ -349,20 +338,29 @@ def main():
 
     # TODO tohle rozdeli komunikaci na pary (pro ktery mam modely nauceny)
     for item in test_com:
+
+        # initializations of needed model
+        model = load_model(item, par)
+
         cnt = 0
         wns = item.split_to_windows(DURATION)
         # TODO tady prochazlim jednotlivy okna a ohodnotim ho, ohodnoceni pripnu do dictionary res
         for window in wns:
             window.parse_conversations()
-            r = anom.detect(window.get_all_conversations(abstraction), item.compair, acc)
-            res[item.compair].append(r)
+            
+            if Model_exists:
+                # Converting conversation to tensor
+                conv = window.get_all_conversations(abstraction)
+                conv_len = max((len(row) for row in conv), default=0)
+                test = LSTM.list_tensor(conv, conv_len, INPUT_DIM)
+                r = model(test)
+                res[item.compair].append(r)
+            else:
+                r = torch.tensor(())
+                r = r.new_ones(1, 1)
+                res[item.compair].append(r)
+
             last = max(cnt, last)
-            if (par.alg == Algorithms.DISTR) and (par.threshold is not None):
-                if min(r) > par.threshold:
-                    ind = r.index(min(r))
-                    model = anom.golden_map[item.compair][ind]
-                    mem_det = anom_member.apply_detection(model, window.get_all_conversations(abstraction), item.compair)
-                    anomalies[item.compair][cnt] = AnomDetails(mem_det, copy.deepcopy(anom.test_fa), copy.deepcopy(anom.golden_map[item.compair][ind]))
             cnt += 1
 
     print("Detection results: ")
@@ -376,14 +374,14 @@ def main():
                 if i == last:
                     continue
                 if AGGREGATE:
-                    print("{0};{1}".format(i, min(v[i])))
+                    print("{0};{1:.4f}".format(i, min(v[i][0])))
                 else:
-                    print("{0};{1}".format(i, v[i]))
+                    print("{0};{1:.4f}".format(i, v[i][0]))
         elif par.alg == Algorithms.MEMBER:
             for i in range(len(v)):
                 if i == last:
                     continue
-                print("{0};{1}".format(i, [ it for its in v[i] for it in its ]))
+                print("{0};{1:.4f}".format(i, [ it for its in v[i][0] for it in its ]))
 
 
 if __name__ == "__main__":

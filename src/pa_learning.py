@@ -42,7 +42,7 @@ from torch.utils.data import DataLoader
 import learning.Network_LSTM as LSTM
 
 # configuration
-BATCH_COUNT = 75
+BATCH_COUNT = 50
 MAX_HIDDEN_DIM = 10
 MAX_STACKED_LAYERS = 2
 LEARNING_RATE = 0.0001
@@ -297,7 +297,7 @@ def main():
         learn_dataset = LSTM.NetworkDataset(x_learn, y_learn)
         validate_dataset = LSTM.NetworkDataset(x_validate, y_validate)
 
-        batch_size = (int)(index/BATCH_COUNT)
+        batch_size = min((int)(index/BATCH_COUNT), 128)
         learn_loader = DataLoader(learn_dataset, batch_size, shuffle=True)
         validate_loader = DataLoader(validate_dataset, batch_size, shuffle=False)
 

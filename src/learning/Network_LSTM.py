@@ -29,6 +29,7 @@ class NetworkLSTM(nn.Module):
 
         out, _ = self.lstm(x, (h0, c0))
         out = self.linear(out[:, -1, :])
+        out = torch.abs(out)
         return out
 
 # Dataset definition
@@ -48,18 +49,23 @@ class NetworkDataset(Dataset):
 Transform list of conversations to pytorch tensors
 """
 def list_tensor(x, conv_len, input_dim):
-    ret = torch.tensor(())
-    tmp = torch.tensor((), dtype=torch.float32)
+    if conv_len > 0:
+        ret = torch.tensor(())
+        tmp = torch.tensor((), dtype=torch.float32)
 
-    for conv in range(len(x)):
-        tmp = tmp.new_zeros(1, conv_len, input_dim)
+        for conv in range(len(x)):
+            tmp = tmp.new_zeros(1, conv_len, input_dim)
 
-        for msg in range(len(x[conv])):
-            for input in range(input_dim):
-                tmp[0][msg][input] = float(x[conv][msg][input])
+            for msg in range(len(x[conv])):
+                for input in range(input_dim):
+                    tmp[0][msg][input] = float(x[conv][msg][input])
 
-        ret = torch.cat((ret, tmp))
-    return ret
+            ret = torch.cat((ret, tmp))
+        return ret
+    else:
+        ret = torch.tensor(())
+        ret = ret.new_zeros(1, 1, input_dim)
+        return ret
 
 
 """
