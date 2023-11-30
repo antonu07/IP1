@@ -328,15 +328,12 @@ def main():
     elif par.file_format == InputFormat.CONV:
         test_parser = iec_prep_par.IEC104ConvParser(test_msgs)
 
-    # TODO detekce a prevod vstupu na tensory
-
     anomalies = defaultdict(lambda: dict())
     res = defaultdict(lambda: [])
     test_com = test_parser.split_communication_pairs()
     last = 0
     acc = par.threshold if ACCELERATE and par.threshold is not None else 0.0
 
-    # TODO tohle rozdeli komunikaci na pary (pro ktery mam modely nauceny)
     for item in test_com:
 
         # initializations of needed model
@@ -344,7 +341,7 @@ def main():
 
         cnt = 0
         wns = item.split_to_windows(DURATION)
-        # TODO tady prochazlim jednotlivy okna a ohodnotim ho, ohodnoceni pripnu do dictionary res
+        
         for window in wns:
             window.parse_conversations()
             
