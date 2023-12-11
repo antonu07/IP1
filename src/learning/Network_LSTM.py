@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 #configuration
-DEVICE = 'cpu'
+DEVICE = 'cuda'
 
 # LSTM model definition
 class NetworkLSTM(nn.Module):
