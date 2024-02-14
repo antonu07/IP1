@@ -38,14 +38,15 @@ import parser.IEC104_conv_parser as iec_prep_par
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import time
 
 import learning.Network_LSTM as LSTM
 
 # configuration
-BATCH_COUNT = 50
+BATCH_SIZE = 2048
 MAX_HIDDEN_DIM = 10
-MAX_STACKED_LAYERS = 2
-LEARNING_RATE = 0.0001
+MAX_STACKED_LAYERS = 1
+LEARNING_RATE = 0.0025
 MAX_EPOCH = 50
 STOP_EARLY_THRESHOLD = 5
 LEARNING = 0.85
@@ -297,9 +298,8 @@ def main():
         learn_dataset = LSTM.NetworkDataset(x_learn, y_learn)
         validate_dataset = LSTM.NetworkDataset(x_validate, y_validate)
 
-        batch_size = min((int)(index/BATCH_COUNT), 128)
-        learn_loader = DataLoader(learn_dataset, batch_size, shuffle=True)
-        validate_loader = DataLoader(validate_dataset, batch_size, shuffle=False)
+        learn_loader = DataLoader(learn_dataset, BATCH_SIZE, shuffle=True)
+        validate_loader = DataLoader(validate_dataset, BATCH_SIZE, shuffle=False)
 
         # defining used loss function
         loss_function = nn.L1Loss()
@@ -308,6 +308,9 @@ def main():
         best_loss_overall = 100
         best_layer = 0
         best_dimension = 0
+
+        # starting time
+        time_start = time.time()
 
         for stacked_layers in range(MAX_STACKED_LAYERS):
             for hidden_dimension in range(MAX_HIDDEN_DIM):
@@ -346,9 +349,14 @@ def main():
                     LSTM.resume(model, "model.pth")
                     LSTM.checkpoint(model, file_name)
 
+        # finished time
+        time_end = time.time()
+        time_overall = time_end - time_start
+
         os.remove("model.pth")
         print("Best model found with: {0} stacked layers, {1} hidden dimension".format(best_layer, best_dimension))
         print("Best loss: %e" % best_loss_overall)
+        print("Time: {0}".format(time_overall))
 
 
 if __name__ == "__main__":
